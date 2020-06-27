@@ -2,12 +2,13 @@ import cv2
 import imutils
 import numpy as np
 import pdb
+import os
 
 #################### X-Y CONVENTIONS #########################
 # 0,0  X  > > > > >
 #
 #  Y
-# 
+#
 #  v  This is the image. Y increases downwards, X increases rightwards
 #  v  Please return bounding boxes as ((xmin, ymin), (xmax, ymax))
 #  v
@@ -36,6 +37,8 @@ def cd_sift_ransac(img, template):
 		bbox: ((x1, y1), (x2, y2)); the bounding box of the cone, unit in px
 				(x1, y1) is the bottom left of the bbox and (x2, y2) is the top right of the bbox
 	"""
+	#
+
 	# Minimum number of matching features
 	MIN_MATCH = 10
 	# Create SIFT
@@ -44,6 +47,10 @@ def cd_sift_ransac(img, template):
 	# Compute SIFT on template and test image
 	kp1, des1 = sift.detectAndCompute(template,None)
 	kp2, des2 = sift.detectAndCompute(img,None)
+
+	# image_print(kp2_img)
+
+
 
 	# Find matches
 	bf = cv2.BFMatcher()
@@ -66,10 +73,27 @@ def cd_sift_ransac(img, template):
 
 		h, w = template.shape
 		pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+		dst = cv2.perspectiveTransform(pts, M)
+		arr = np.int32(dst)
+		x_min = min(arr[:,0,0])
+		y_min = min(arr[:,0,1])
+		x_max = max(arr[:,0,0])
+		y_max = max(arr[:,0,1])
+
+		img_rect = cv2.rectangle(img, (x_min, y_min), (x_max, y_max), 255, 2, cv2.LINE_AA)
+		img_matches = cv2.drawMatches(template, kp1, img, kp2, good, None,
+						matchesMask=matchesMask, matchColor=(0, 255, 0), flags=2)
+		ix = 0
+		while 1:
+			if os.path.exists("sift_map_matches_{}.jpg".format(ix)):
+				ix += 1
+			else:
+				cv2.imwrite("sift_map_matches_{}.jpg".format(ix), img_matches)
+				break
+
+		# print(np.int32(dst))
 
 		########## YOUR CODE STARTS HERE ##########
-		
-		x_min = y_min = x_max = y_max = 0
 
 		########### YOUR CODE ENDS HERE ###########
 
@@ -92,7 +116,7 @@ def cd_template_matching(img, template):
 				(x1, y1) is the bottom left of the bbox and (x2, y2) is the top right of the bbox
 	"""
 	template_canny = cv2.Canny(template, 50, 200)
-	
+
 	# Perform Canny Edge detection on test image
 	grey_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 	img_canny = cv2.Canny(grey_img, 50, 200)
@@ -111,13 +135,27 @@ def cd_template_matching(img, template):
 		# Check to see if test image is now smaller than template image
 		if resized_template.shape[0] > img_height or resized_template.shape[1] > img_width:
 			continue
-		
+
 		########## YOUR CODE STARTS HERE ##########
 		# Use OpenCV template matching functions to find the best match
 		# across template scales.
 		# Remember to resize the bounding box using the highest scoring scale
 		# x1,y1 pixel will be accurate, but x2,y2 needs to be correctly scaled
-		bounding_box = ((0,0),(0,0))
+		res = cv2.matchTemplate(template_canny, img_canny, cv2.TM_CCORR_NORMED)
+		min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+		if best_match is None or best_match[0] < max_val:
+			best_match = (max_val, max_loc)
+
+	bounding_box = (best_match[1], (best_match[1][0] + w, best_match[1][1] + h))
+	img_rect = cv2.rectangle(img, bounding_box[0], bounding_box[1], 255, 2)
+	ix = 0
+	while 1:
+		if os.path.exists("template_citgo_{}.jpg".format(ix)):
+			ix += 1
+		else:
+			cv2.imwrite("template_citgo_{}.jpg".format(ix), img_rect)
+			break
+	# bounding_box = ((0,0),(0,0))
 		########### YOUR CODE ENDS HERE ###########
 
 	return bounding_box
